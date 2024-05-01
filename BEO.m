@@ -1,23 +1,15 @@
-function [Group_Best_Pos,Group_Best_Score,WAR_curve,runtime]=BEO2(fhd,dim,N,Max_iteration,lb,ub,varargin)
-%% 参数设置
+function [Group_Best_Pos,Group_Best_Score,WAR_curve,runtime]=BEO(fhd,dim,N,Max_iteration,lb,ub,varargin)
+%% parameter setting
 ub = ub.*ones(dim,1);    
 lb = lb.*ones(dim,1);  
 R=N; 
-T=Max_iteration;    %最大迭代次数
-% 设置随机种子
+T=Max_iteration;    
 rand('twister',mod(floor(now*8640000),2^31-1))
-%% 初始化
+%% initialization
 WAR_curve=zeros(1,R);
-x = zeros(dim, R);
-for i = 1:R
-    for j = 1:dim
-        % 利用 Tent 混沌映射生成初始化数据
-        x(j, i) = lb(j) + tent_map(rand(1), 0.4999) * (ub(j) - lb(j));
-    end
-end
-
+x=initialization(R,dim,ub,lb);
 for i=1:R
-    Fitness1(i)=feval(fhd,x(:,i),varargin{:});  %计算适应度值
+    Fitness1(i)=feval(fhd,x(:,i),varargin{:});  
 end
 [F_x,index]=sort(Fitness1);
 A_Pos=x(:,index(1));
@@ -27,16 +19,16 @@ L=0;
 A=A_Score;
 IT=0;
 tic
-%% 开始迭代更新
+%% Start iterative updates
 while t<T
-    %%侦察阶段
+    %% stalking
     ub1=ub;
     lb1=lb;
-    [~, max_index] = max(abs(A_Pos)); % 找到绝对值最大的元素和其对应的维度
+    [~, max_index] = max(abs(A_Pos)); 
     lb1(max_index)=(ub(max_index)+lb(max_index))/2;
     for j=1:R
         r1=rand(dim,1);
-        D = max(norm(ub-A_Pos),norm(A_Pos-lb)); % A远离B的最大距离
+        D = max(norm(ub-A_Pos),norm(A_Pos-lb)); 
         alpha = exp(-(norm( x(:,j)-A_Pos)/D));
         r2=rand;
         r3=tent_map(rand(1), 0.5);
@@ -45,7 +37,7 @@ while t<T
         x_k= x(:,rx);
         xnew1(:,j)=x(:,j);
         xnew21(:,j)=x_r+alpha*r2*(r3*A_Pos-x_k);%盯梢
-        xnew22(:,j)= lb+ub - xnew21(:,j);%
+        xnew22(:,j)= lb+ub - xnew21(:,j);
     end
     xnew=[xnew1,xnew21,xnew22];
      for i=1:3*R
@@ -66,9 +58,7 @@ while t<T
     x=xnew(:,indexf(1:R));
     Fitness1=fx(1:R);
 
-    
-  
-    %%攻击阶段
+    %% warning mechanism
     x0=zeros(dim,R);
     for i=1:dim
         if A_Pos(i)>=0.8*ub(i)||A_Pos(i)<=0.8*lb(i)
@@ -92,7 +82,7 @@ while t<T
             x0(i,:)=xnew3(i,:);
         end
     end
-    %%
+    %% hovering
     for j=1:R
         rotation_angle = rand*2*pi;
         rotation_matrix = eye(dim);
@@ -122,7 +112,7 @@ while t<T
         A_Score=A_Score1;
         A_Pos=A_Pos1;
     end
-    %%  
+    %% catching  
         d1 = sqrt(sum((x - mean(x)).^2, 1));
         md1=(median(d1)+mean(d1))/2;
         for j=1:R
@@ -156,10 +146,9 @@ while t<T
     if A_Score1<A_Score
         A_Score=A_Score1;
         A_Pos=A_Pos1;
-        disp( ['抓捕值',num2str(A_Score)])
     end
     for j=1:R
-        xnew6(:,j)= A_Pos+exp(randn(dim,1)/pi).*( A_Pos - x(:,j));%掠夺0.2-2,均值为1
+        xnew6(:,j)= A_Pos+exp(randn(dim,1)/pi).*( A_Pos - x(:,j));
     end
     for i=1:R
         ub_flag=xnew6(:,i)>ub;
@@ -178,11 +167,11 @@ while t<T
         A_Score=A_Score1;
         A_Pos=A_Pos1;
     end
-    %%迁徙
+    %% migration
     if t>=0.1*T||L>0.1*T/2
         for j=1:R
             Fitness(j)=feval(fhd,x(:,j),varargin{:});
-            z=1/(2*exp(-(A_Score/(Fitness(j)+eps))));%大约1.1-1.3
+            z=1/(2*exp(-(A_Score/(Fitness(j)+eps))));
             s=-ones(dim,1);
             s0=s+2*rand(dim,1);
             xnew7(:,j)=A_Pos+z.*s0.*(x(:,j)-(0.4+0.6.*tent_map(rand(dim,1), 0.5)).*A_Pos);
@@ -206,8 +195,7 @@ while t<T
     end
 
     end
-    %%
-    %%求偶
+    %% courtship
     if t>=0.3*T||L>0.3*T/2
                   f = 1./(1*(1+exp(-(14*t/T-9))))+0.3;%0.3-1.3
         for j=1:R
@@ -238,11 +226,9 @@ while t<T
         if A_Score1<A_Score
             A_Score=A_Score1;
             A_Pos=A_Pos1;
-%             disp( ['求偶值',num2str(A_Score)])
         end
 
-        %%
-        %%筑巢
+        %% hatching
         distances1 = sqrt(sum((x - A_Pos).^2, 1));
         [~, sorted_indices1] = sort(distances1);
         xnew9 = zeros(size(x));
@@ -269,7 +255,6 @@ while t<T
         if A_Score1<A_Score
             A_Score=A_Score1;
             A_Pos=A_Pos1;
-%             disp( ['筑巢值',num2str(A_Score)])
         end
 
         
@@ -283,9 +268,9 @@ while t<T
 
 
     Group_Best_Score=A_Score;
-     disp( ['最佳值',num2str(Group_Best_Score)])
+     disp( ['best score',num2str(Group_Best_Score)])
     Group_Best_Pos=A_Pos;
-    t=t+1;  %迭代次数加一
+    t=t+1;  
     WAR_curve(t)=Group_Best_Score;
     
     
@@ -293,7 +278,14 @@ end
 runtime=toc;
 
 %%
-
+ function P=initialization(R,dim,ub,lb)
+  for a = 1:R
+    for b = 1:dim
+        Rand=tent_map(rand(1), 0.4999);
+        P(b, a) = lb(b) + Rand * (ub(b) - lb(b));
+    end
+  end
+end
     function output = tent_map(x, a)
         if x < a
             output = x / a;
